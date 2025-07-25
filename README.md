@@ -37,12 +37,7 @@ A modern, feature-rich task management application built with Flutter. Manage yo
 - **Web** - Progressive Web App support
 - **Desktop** - Windows, macOS, Linux support
 
-## 📱 Screenshots
-
-### Authentication Screens
-- Modern login screen with social media options
-- Registration form with validation
-- User profile management
+## 📱 Demo Vedio https://www.loom.com/share/64a9c7bdaad84dd28cbd3ed4862bbccb?sid=e3eb9137-76cf-465d-9be1-2662f9fe72b8
 
 ### Task Management
 - Clean task list with completion status
