@@ -1,95 +1,80 @@
-import 'dart:io';
-
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:task_manager/models/task_model.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:task_manager/services/auth_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._instance();
-  static Database _db;
 
   DatabaseHelper._instance();
 
-  String tasksTable = 'task_table';
-  String colId = 'id';
-  String colTitle = 'title';
-  String colDate = 'date';
-  String colPriority = 'priority';
-  String colStatus = 'status';
-
-  // Task Tables
-  // Id | Title | Date | Priority | Status
-  // 0     ''      ''      ''         0
-  // 1     ''      ''      ''         0
-  // 2     ''      ''      ''         0
-
-  Future<Database> get db async {
-    if (_db == null) {
-      _db = await _initDb();
-    }
-    return _db;
-  }
-
-  Future<Database> _initDb() async {
-    Directory dir = await getApplicationDocumentsDirectory();
-    String path = dir.path + '/todo_list.db';
-    final todoListDb =
-        await openDatabase(path, version: 1, onCreate: _createDb);
-    return todoListDb;
-  }
-
-  void _createDb(Database db, int version) async {
-    await db.execute(
-      'CREATE TABLE $tasksTable($colId INTEGER PRIMARY KEY AUTOINCREMENT, $colTitle TEXT, $colDate TEXT, $colPriority TEXT, $colStatus INTEGER)',
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> getTaskMapList() async {
-    Database db = await this.db;
-    final List<Map<String, dynamic>> result = await db.query(tasksTable);
-    return result;
+  String _getUserTasksKey() {
+    final userId = AuthService().currentUser?.uid ?? 'guest';
+    return 'tasks_$userId';
   }
 
   Future<List<Task>> getTaskList() async {
-    final List<Map<String, dynamic>> taskMapList = await getTaskMapList();
-    final List<Task> taskList = [];
-    taskMapList.forEach((taskMap) {
-      taskList.add(Task.fromMap(taskMap));
-    });
+    final prefs = await SharedPreferences.getInstance();
+    final tasksJson = prefs.getStringList(_getUserTasksKey()) ?? [];
+    
+    final List<Task> taskList = tasksJson.map((taskStr) {
+      final Map<String, dynamic> taskMap = json.decode(taskStr);
+      return Task.fromMap(taskMap);
+    }).toList();
+    
     taskList.sort((taskA, taskB) => taskA.date.compareTo(taskB.date));
     return taskList;
   }
 
   Future<int> insertTask(Task task) async {
-    Database db = await this.db;
-    final int result = await db.insert(tasksTable, task.toMap());
-    return result;
+    final prefs = await SharedPreferences.getInstance();
+    final tasks = await getTaskList();
+    
+    // Generate a new ID
+    int newId = 1;
+    if (tasks.isNotEmpty) {
+      newId = tasks.map((t) => t.id ?? 0).reduce((a, b) => a > b ? a : b) + 1;
+    }
+    task.id = newId;
+    
+    tasks.add(task);
+    await _saveTasks(tasks);
+    return newId;
   }
 
   Future<int> updateTask(Task task) async {
-    Database db = await this.db;
-    final int result = await db.update(
-      tasksTable,
-      task.toMap(),
-      where: '$colId = ?',
-      whereArgs: [task.id],
-    );
-    return result;
+    final tasks = await getTaskList();
+    final index = tasks.indexWhere((t) => t.id == task.id);
+    
+    if (index != -1) {
+      tasks[index] = task;
+      await _saveTasks(tasks);
+      return 1;
+    }
+    return 0;
   }
 
   Future<int> deleteTask(int id) async {
-    Database db = await this.db;
-    final int result = await db.delete(
-      tasksTable,
-      where: '$colId = ?',
-      whereArgs: [id],
-    );
-    return result;
+    final tasks = await getTaskList();
+    final initialLength = tasks.length;
+    tasks.removeWhere((task) => task.id == id);
+    
+    if (tasks.length < initialLength) {
+      await _saveTasks(tasks);
+      return 1;
+    }
+    return 0;
   }
 
   Future<int> deleteAllTask() async {
-    Database db = await this.db;
-    final int result = await db.delete(tasksTable);
-    return result;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_getUserTasksKey());
+    return 1;
+  }
+
+  Future<void> _saveTasks(List<Task> tasks) async {
+    final prefs = await SharedPreferences.getInstance();
+    final tasksJson = tasks.map((task) => json.encode(task.toMap())).toList();
+    await prefs.setStringList(_getUserTasksKey(), tasksJson);
   }
 }

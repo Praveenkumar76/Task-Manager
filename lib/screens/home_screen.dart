@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:task_manager/helpers/database_helper.dart';
 import 'package:task_manager/models/task_model.dart';
+import 'package:task_manager/services/auth_service.dart';
+import 'package:task_manager/screens/auth/login_screen.dart';
 import 'history_screen.dart';
 import 'package:task_manager/screens/add_task_screen.dart';
 import 'package:intl/intl.dart';
 import 'settings_screen.dart';
-import 'package:toast/toast.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -15,7 +17,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Future<List<Task>> _taskList;
+  Future<List<Task>>? _taskList;
   final DateFormat _dateFormatter = DateFormat('MMM dd, yyyy');
 
   @override
@@ -30,8 +32,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<bool> onBackPressed() {
-    return SystemNavigator.pop();
+  Future<bool> onBackPressed() async {
+    SystemNavigator.pop();
+    return true;
   }
 
   Widget _buildTask(Task task) {
@@ -61,10 +64,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               trailing: Checkbox(
                 onChanged: (value) {
-                  task.status = value ? 1 : 0;
+                  task.status = value! ? 1 : 0;
                   DatabaseHelper.instance.updateTask(task);
-                  Toast.show("Task Completed", context,
-                      duration: Toast.LENGTH_LONG, gravity: Toast.BOTTOM);
+                  Fluttertoast.showToast(msg: "Task Completed");
                   _updateTaskList();
                 },
                 activeColor: Theme.of(context).primaryColor,
@@ -137,26 +139,62 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           centerTitle: false,
           elevation: 0,
-          actions: [
-            Container(
-              margin: const EdgeInsets.all(0),
-              child: IconButton(
-                  icon: Icon(Icons.history_outlined),
-                  iconSize: 25.0,
-                  color: Colors.black,
-                  onPressed: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => HistoryScreen()))),
-            ),
-            Container(
-              margin: const EdgeInsets.all(6.0),
-              child: IconButton(
-                  icon: Icon(Icons.settings_outlined),
-                  iconSize: 25.0,
-                  color: Colors.black,
-                  onPressed: () => Navigator.push(
-                      context, MaterialPageRoute(builder: (_) => Settings()))),
-            )
-          ],
+                     actions: [
+             Container(
+               margin: const EdgeInsets.all(0),
+               child: IconButton(
+                   icon: Icon(Icons.history_outlined),
+                   iconSize: 25.0,
+                   color: Colors.black,
+                   onPressed: () => Navigator.push(context,
+                       MaterialPageRoute(builder: (_) => HistoryScreen()))),
+             ),
+             Container(
+               margin: const EdgeInsets.all(6.0),
+               child: IconButton(
+                   icon: Icon(Icons.settings_outlined),
+                   iconSize: 25.0,
+                   color: Colors.black,
+                   onPressed: () => Navigator.push(
+                       context, MaterialPageRoute(builder: (_) => Settings()))),
+             ),
+             Container(
+               margin: const EdgeInsets.all(6.0),
+               child: PopupMenuButton<String>(
+                 onSelected: (value) => _handleMenuAction(value),
+                 icon: CircleAvatar(
+                   radius: 16,
+                   backgroundColor: Colors.redAccent,
+                   child: Text(
+                                           AuthService().currentUser?.displayName?.substring(0, 1).toUpperCase() ?? 'U',
+                     style: TextStyle(color: Colors.white, fontSize: 14),
+                   ),
+                 ),
+                 itemBuilder: (BuildContext context) => [
+                   PopupMenuItem<String>(
+                     value: 'profile',
+                     child: Row(
+                       children: [
+                         Icon(Icons.person_outline, size: 20),
+                         SizedBox(width: 8),
+                         Text('Profile'),
+                       ],
+                     ),
+                   ),
+                   PopupMenuItem<String>(
+                     value: 'logout',
+                     child: Row(
+                       children: [
+                         Icon(Icons.logout, size: 20),
+                         SizedBox(width: 8),
+                         Text('Logout'),
+                       ],
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+           ],
         ),
         body: FutureBuilder(
           future: _taskList,
@@ -167,14 +205,14 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }
 
-            final int completedTaskCount = snapshot.data
+                         final int completedTaskCount = snapshot.data!
                 .where((Task task) => task.status == 0)
                 .toList()
                 .length;
 
             return ListView.builder(
               padding: EdgeInsets.symmetric(vertical: 0.0),
-              itemCount: 1 + snapshot.data.length,
+              itemCount: 1 + snapshot.data!.length,
               itemBuilder: (BuildContext context, int index) {
                 if (index == 0) {
                   return Padding(
@@ -195,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              'You have [ $completedTaskCount ] pending task out of [ ${snapshot.data.length} ]',
+                              'You have [ $completedTaskCount ] pending task out of [ ${snapshot.data!.length} ]',
                               style: TextStyle(
                                 color: Colors.blueGrey,
                                 fontSize: 15.0,
@@ -208,12 +246,81 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 }
-                return _buildTask(snapshot.data[index - 1]);
+                return _buildTask(snapshot.data![index - 1]);
               },
             );
           },
         ),
       ),
     );
+  }
+
+  void _handleMenuAction(String value) async {
+    switch (value) {
+      case 'profile':
+        _showUserProfile();
+        break;
+      case 'logout':
+        await _logout();
+        break;
+    }
+  }
+
+  void _showUserProfile() {
+    final user = AuthService().currentUser;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: Colors.redAccent,
+              child: Text(
+                user?.displayName?.substring(0, 1).toUpperCase() ?? 'U',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            SizedBox(width: 12),
+            Text('User Profile'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Name: ${user?.displayName ?? 'Unknown'}'),
+            SizedBox(height: 8),
+            Text('Email: ${user?.email ?? 'Unknown'}'),
+            SizedBox(height: 8),
+            Text('User ID: ${user?.uid ?? 'Unknown'}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _logout() async {
+    try {
+      await AuthService().signOut();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error signing out: $e',
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
   }
 }

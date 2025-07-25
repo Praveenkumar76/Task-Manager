@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:task_manager/helpers/database_helper.dart';
 import 'home_screen.dart';
 import 'stacked_icons.dart';
-import 'package:toast/toast.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class Settings extends StatefulWidget {
@@ -13,19 +13,15 @@ class Settings extends StatefulWidget {
 showAlertDialog(BuildContext context) async {
 
   // set up the buttons
-  // ignore: deprecated_member_use
-  Widget cancelButton = FlatButton(
+  Widget cancelButton = TextButton(
     child: Text("Cancel"),
     onPressed:  () {Navigator.pop(context);},
   );
-  // ignore: deprecated_member_use
-  Widget continueButton = FlatButton(
+  Widget continueButton = TextButton(
     child: Text("OK"),
     onPressed:  () {
       DatabaseHelper.instance.deleteAllTask();
-      Toast.show("All data cleared", context,
-        duration: Toast.LENGTH_LONG,
-        gravity: Toast.BOTTOM);
+      Fluttertoast.showToast(msg: "All data cleared");
       Navigator.push(
           context,
           MaterialPageRoute(
